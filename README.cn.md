@@ -20,20 +20,25 @@
 require 'smart_agent'
 
 SmartAgent.define :weather_bot do
-  function :get_weather do |location|
-    # 调用天气API
-  end
-
-  task "获取天气预报" do
-    execute ->(params) {
-      location = params[:location]
-      { forecast: get_weather(location) }
-    }
+  result = call_worker(:weather, params, with_tools: true)
+  if result.call_tools? 
+    weather_result = call_tools(result)
+    return call_worker(:weather_summary, params, weather_result, with_tools: false)
+  else
+    return result
   end
 end
 
-agent = SmartAgent.create(:weather_bot)
-puts agent.run_task("获取天气预报", location: "上海")
+SmartTool.define :get_weather do |location, date|
+  param_define :location, "城市或具体地址", :str
+  param_define :date, "具体日期、今天或明天", :date
+  # 调用天气API
+end
+
+engine = SmartPrompt::Engine.new("./config/llm_config.yml")
+agent = SmartAgentFactory.new(engine).create(:weather_bot, [:get_weather])
+
+puts agent.please("获取上海明天的天气预报")
 ```
 
 ## 安装

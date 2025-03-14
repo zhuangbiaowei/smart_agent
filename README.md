@@ -20,20 +20,25 @@ An intelligent agent framework built on [smart_prompt](https://github.com/zhuang
 require 'smart_agent'
 
 SmartAgent.define :weather_bot do
-  function :get_weather do |location|
-    # Call weather API
-  end
-
-  task "Get Weather Forecast" do
-    execute ->(params) {
-      location = params[:location]
-      { forecast: get_weather(location) }
-    }
+  result = call_worker(:weather, params, with_tools: true)
+  if result.call_tools? 
+    weather_result = call_tools(result)
+    return call_worker(:weather_summary, params, weather_result, with_tools: false)
+  else
+    return result
   end
 end
 
-agent = SmartAgent.create(:weather_bot)
-puts agent.run_task("Get Weather Forecast", location: "Shanghai")
+SmartTool.define :get_weather do |location, date|
+  param_define :location, "City or More Specific Address", :str
+  param_define :date, "Specific Date or Today or Tomorrow", :date
+  # 调用天气API
+end
+
+engine = SmartPrompt::Engine.new("./config/llm_config.yml")
+agent = SmartAgentFactory.new(engine).create(:weather_bot, [:get_weather])
+
+puts agent.please("Get tomorrow's weather forecast in Shanghai")
 ```
 
 ## Installation
