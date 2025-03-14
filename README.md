@@ -32,7 +32,7 @@ end
 SmartTool.define :get_weather do |location, date|
   param_define :location, "City or More Specific Address", :str
   param_define :date, "Specific Date or Today or Tomorrow", :date
-  # 调用天气API
+  # Call the Weather API
 end
 
 engine = SmartPrompt::Engine.new("./config/llm_config.yml")
