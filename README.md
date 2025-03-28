@@ -29,14 +29,15 @@ SmartAgent.define :weather_bot do
   end
 end
 
-SmartTool.define :get_weather do |location, date|
+SmartAgent::Tool.define :get_weather do |location, date|
   param_define :location, "City or More Specific Address", :str
   param_define :date, "Specific Date or Today or Tomorrow", :date
   # Call the Weather API
 end
 
 engine = SmartPrompt::Engine.new("./config/llm_config.yml")
-agent = SmartAgentFactory.new(engine).create(:weather_bot, [:get_weather])
+SmartAgent.engine = engine
+agent = SmartAgent.create(:weather_bot, [:get_weather])
 
 puts agent.please("Get tomorrow's weather forecast in Shanghai")
 ```

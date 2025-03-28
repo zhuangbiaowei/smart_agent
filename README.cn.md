@@ -29,14 +29,14 @@ SmartAgent.define :weather_bot do
   end
 end
 
-SmartTool.define :get_weather do |location, date|
+SmartAgent::Tool.define :get_weather do |location, date|
   param_define :location, "城市或具体地址", :str
   param_define :date, "具体日期、今天或明天", :date
   # 调用天气API
 end
 
 engine = SmartPrompt::Engine.new("./config/llm_config.yml")
-agent = SmartAgentFactory.new(engine).create(:weather_bot, [:get_weather])
+agent = SmartAgent::Factory.new(engine).create(:weather_bot, [:get_weather])
 
 puts agent.please("获取上海明天的天气预报")
 ```
