@@ -1,0 +1,26 @@
+adapters:
+  openai: OpenAIAdapter
+logger_file: ./log/prompt.log
+database:
+  docs: postgres://docs:ment@localhost/docs
+llms:
+  SiliconFlow:
+    adapter: openai
+    url: https://api.siliconflow.cn/v1/
+    api_key: ENV["APIKey"]
+    default_model: Qwen/Qwen2.5-7B-Instruct
+  llamacpp:
+    adapter: openai
+    url: http://localhost:8080/    
+  ollama:
+    adapter: openai
+    url: http://localhost:11434/
+    default_model: deepseek-r1
+  deepseek:
+    adapter: openai
+    url: https://api.deepseek.com
+    api_key: ENV["DSKEY"]
+    default_model: deepseek-reasoner
+default_llm: SiliconFlow
+worker_path: "./workers"
+template_path: "./templates"

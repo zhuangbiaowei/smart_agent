@@ -1,76 +1,89 @@
-# Smart Agent Framework
+# SmartAgent Framework
 
-[![Ruby Version](https://img.shields.io/badge/Ruby-3.2%2B-red)](https://www.ruby-lang.org)
-[![Gem Version](https://img.shields.io/gem/v/smart_agent)](https://rubygems.org/gems/smart_agent)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+SmartAgent is an intelligent agent framework developed in Ruby, supporting tool calling and natural language interaction.
 
-An intelligent agent framework built on [smart_prompt](https://github.com/zhuangbiaowei/smart_prompt), featuring DSL definition, function calling and MCP protocol integration.
+## Features
 
-## Key Features
-
-- **Declarative DSL** - Define agents and workflows using concise Ruby syntax
-- **Function Calling** - Seamless integration with LLM capabilities
-- **MCP Protocol** - Built-in Model Context Protocol support
-- **Task Orchestration** - Coordinate multiple agents for complex tasks
-- **Extensible Architecture** - Support custom functions and protocol handlers
-
-## Quick Start
-
-```ruby
-require 'smart_agent'
-
-SmartAgent.define :weather_bot do
-  result = call_worker(:weather, params, with_tools: true)
-  if result.call_tools? 
-    weather_result = call_tools(result)
-    return call_worker(:weather_summary, params, weather_result, with_tools: false)
-  else
-    return result
-  end
-end
-
-SmartAgent::Tool.define :get_weather do |location, date|
-  param_define :location, "City or More Specific Address", :str
-  param_define :date, "Specific Date or Today or Tomorrow", :date
-  # Call the Weather API
-end
-
-engine = SmartPrompt::Engine.new("./config/llm_config.yml")
-SmartAgent.engine = engine
-agent = SmartAgent.create(:weather_bot, [:get_weather])
-
-puts agent.please("Get tomorrow's weather forecast in Shanghai")
-```
+- Supports defining smart agents (SmartAgent) and tools (Tool)
+- Built-in utility tools:
+  - Weather query (get_weather)
+  - Math calculations (get_sum)
+  - Code generation and execution (get_code)
+- Integrated with OpenDigger MCP service
+- Supports natural language interaction in both English and Chinese
+- Extensible tool system
 
 ## Installation
 
-Add to your Gemfile:
-```ruby
-gem 'smart_agent'
+Ensure you have Ruby (>= 2.7) and Bundler installed:
+
+```bash
+gem install bundler
 ```
 
-Then execute:
+Then run:
+
 ```bash
 bundle install
 ```
 
-Or install directly:
+Or install the gem directly:
+
 ```bash
 gem install smart_agent
 ```
 
-## Documentation
+## Usage Examples
 
-Full documentation available at: [docs.smartagent.dev](https://docs.smartagent.dev)
+### Basic Usage
+
+```ruby
+require 'smart_agent'
+
+agent = SmartAgent.build_agent(:smart_bot, tools: [:get_code])
+
+# Weather query
+puts agent.please("What's the weather in Shanghai tomorrow?")
+
+# Math calculation
+puts agent.please("Calculate the sum of 130 and 51")
+
+# Code generation and execution
+puts agent.please("Calculate the area of a triangle with base 132 and height 7.6 using a Ruby function")
+```
+
+### Custom Tools
+
+```ruby
+SmartAgent::Tool.define :my_tool do
+  param_define :param1, "Parameter description", :string
+  param_define :param2, "Another parameter", :integer
+  
+  if input_params
+    # Tool logic
+    "Processing result"
+  end
+end
+```
+
+## MCP Integration
+
+Supports getting GitHub project metrics via OpenDigger MCP service:
+
+```ruby
+
+SmartAgent::MCPClient.define :opendigger do
+  type :stdio
+  command "node ~/open-digger-mcp-server/dist/index.js"
+end
+
+puts agent.please("Query OpenRank metrics changes for Vue project on GitHub")
+```
 
 ## Contributing
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add some amazing feature'`)
-4. Push branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Issues and pull requests are welcome.
 
 ## License
 
-Released under the MIT License. See [LICENSE](LICENSE) for details.
+MIT License. See LICENSE file for details.

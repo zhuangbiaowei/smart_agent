@@ -63,5 +63,9 @@ module SmartAgent
     def param_define(name, description, type)
       params[name] = { description: description, type: type }
     end
+
+    def call_worker(name, params)
+      SmartAgent.prompt_engine.call_worker(name, params)
+    end
   end
 end

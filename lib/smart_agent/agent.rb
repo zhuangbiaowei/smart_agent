@@ -87,10 +87,10 @@ module SmartAgent
       if @agent.on_event && with_tools == false
         SmartAgent.prompt_engine.call_worker_by_stream(name, params) do |chunk, _bytesize|
           if chunk.dig("choices", 0, "delta", "reasoning_content")
-            @agent.processor(:reasoning).call(chunk)
+            @agent.processor(:reasoning).call(chunk) if @agent.processor(:reasoning)
           end
           if chunk.dig("choices", 0, "delta", "content")
-            @agent.processor(:content).call(chunk)
+            @agent.processor(:content).call(chunk) if @agent.processor(:content)
           end
         end
       else
@@ -101,23 +101,23 @@ module SmartAgent
     end
 
     def call_tools(result)
-      @agent.processor(:tool).call({ :status => :start })
+      @agent.processor(:tool).call({ :status => :start }) if @agent.processor(:tool)
       SmartAgent.logger.info("call tools: " + result.to_s)
       results = []
       result.call_tools.each do |tool|
         tool_name = tool["function"]["name"].to_sym
         params = JSON.parse(tool["function"]["arguments"])
         if Tool.find_tool(tool_name)
-          @agent.processor(:tool).call({ :content => "ToolName is `#{tool_name}`" })
+          @agent.processor(:tool).call({ :content => "ToolName is `#{tool_name}`" }) if @agent.processor(:tool)
           results << Tool.new(tool_name).call(params)
         end
         if server_name = MCPClient.find_server_by_tool_name(tool_name)
-          @agent.processor(:tool).call({ :content => "MCP Server is `#{server_name}`, ToolName is `#{tool_name}`" })
+          @agent.processor(:tool).call({ :content => "MCP Server is `#{server_name}`, ToolName is `#{tool_name}`" }) if @agent.processor(:tool)
           results << MCPClient.new(server_name).call(tool_name, params)
         end
-        @agent.processor(:tool).call({ :content => " ... done\n" })
+        @agent.processor(:tool).call({ :content => " ... done\n" }) if @agent.processor(:tool)
       end
-      @agent.processor(:tool).call({ :status => :end })
+      @agent.processor(:tool).call({ :status => :end }) if @agent.processor(:tool)
       return results
     end
 

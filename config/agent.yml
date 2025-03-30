@@ -1,0 +1,5 @@
+logger_file: "./log/agent.log"
+engine_config: "./config/llm_config.yml"
+agent_path: "./agents"
+tools_path: "./agents/tools"
+mcp_path: "./agents/mcps"
