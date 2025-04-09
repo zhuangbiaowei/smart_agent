@@ -65,13 +65,12 @@ module SmartAgent
       @agent = agent
     end
 
-    def call_worker(name, params, result: nil, with_tools: true)
-      if result
-        params[:result] = result
-      end
+    def call_worker(name, params, with_tools: true, with_history: false)
+      SmartAgent.logger.info ("Call Worker name is: #{name}")
       if with_tools
+        simple_tools = []
         if @agent.tools
-          simple_tools = @agent.tools.map { |tool_name| Tool.new(tool_name).to_json }
+          simple_tools = @agent.tools.map { |tool_name| Tool.find_tool(tool_name).to_json }
         end
         if @agent.servers
           mcp_tools = @agent.servers.map { |mcp_name| MCPClient.new(mcp_name).to_json }
@@ -83,21 +82,51 @@ module SmartAgent
         end
         params[:tools] = simple_tools
       end
+      params[:with_history] = with_history
       ret = nil
-      if @agent.on_event && with_tools == false
-        SmartAgent.prompt_engine.call_worker_by_stream(name, params) do |chunk, _bytesize|
+      if @agent.on_event
+        tool_result = {}
+        tool_calls = []
+        result = SmartAgent.prompt_engine.call_worker_by_stream(name, params) do |chunk, _bytesize|
+          if tool_result.empty?
+            tool_result["id"] = chunk["id"]
+            tool_result["object"] = chunk["object"]
+            tool_result["created"] = chunk["created"]
+            tool_result["model"] = chunk["model"]
+            tool_result["choices"] = [{
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => "",
+                "tool_calls" => [],
+              },
+            }]
+            tool_result["usage"] = chunk["usage"]
+            tool_result["system_fingerprint"] = chunk["system_fingerprint"]
+          end
           if chunk.dig("choices", 0, "delta", "reasoning_content")
             @agent.processor(:reasoning).call(chunk) if @agent.processor(:reasoning)
           end
           if chunk.dig("choices", 0, "delta", "content")
             @agent.processor(:content).call(chunk) if @agent.processor(:content)
           end
+          if chunk_tool_calls = chunk.dig("choices", 0, "delta", "tool_calls")
+            chunk_tool_calls.each do |tool_call|
+              if tool_calls.size > tool_call["index"]
+                tool_calls[tool_call["index"]]["function"]["arguments"] += tool_call["function"]["arguments"]
+              else
+                tool_calls << tool_call
+              end
+            end
+          end
         end
+        tool_result["choices"][0]["message"]["tool_calls"] = tool_calls
+        result = tool_result
       else
         result = SmartAgent.prompt_engine.call_worker(name, params)
-        ret = Result.new(result)
-        return ret
       end
+      ret = Result.new(result)
+      return ret
     end
 
     def call_tools(result)
@@ -105,15 +134,24 @@ module SmartAgent
       SmartAgent.logger.info("call tools: " + result.to_s)
       results = []
       result.call_tools.each do |tool|
+        tool_call_id = tool["id"]
         tool_name = tool["function"]["name"].to_sym
         params = JSON.parse(tool["function"]["arguments"])
         if Tool.find_tool(tool_name)
-          @agent.processor(:tool).call({ :content => "ToolName is `#{tool_name}`" }) if @agent.processor(:tool)
-          results << Tool.new(tool_name).call(params)
+          @agent.processor(:tool).call({ :content => "ToolName is `#{tool_name}`\n" }) if @agent.processor(:tool)
+          @agent.processor(:tool).call({ :content => "params is `#{params}`\n" }) if @agent.processor(:tool)
+          tool_result = Tool.find_tool(tool_name).call(params)
+          SmartAgent.prompt_engine.history_messages << result.response.dig("choices", 0, "message")
+          SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s.force_encoding("UTF-8") }
+          results << result
         end
         if server_name = MCPClient.find_server_by_tool_name(tool_name)
-          @agent.processor(:tool).call({ :content => "MCP Server is `#{server_name}`, ToolName is `#{tool_name}`" }) if @agent.processor(:tool)
-          results << MCPClient.new(server_name).call(tool_name, params)
+          @agent.processor(:tool).call({ :content => "MCP Server is `#{server_name}`, ToolName is `#{tool_name}`\n" }) if @agent.processor(:tool)
+          @agent.processor(:tool).call({ :content => "params is `#{params}`\n" }) if @agent.processor(:tool)
+          tool_result = MCPClient.new(server_name).call(tool_name, params)
+          SmartAgent.prompt_engine.history_messages << result.response.dig("choices", 0, "message")
+          SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s }
+          results << result
         end
         @agent.processor(:tool).call({ :content => " ... done\n" }) if @agent.processor(:tool)
       end

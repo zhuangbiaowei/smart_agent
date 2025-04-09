@@ -1,6 +1,8 @@
 SmartPrompt.define_worker :get_code do
-  use "deepseek"
-  model "deepseek-chat"
+  #use "deepseek"
+  #model "deepseek-chat"
+  use "SiliconFlow"
+  model "deepseek-ai/DeepSeek-V3"
   sys_msg "You are a helpful programmer."
   prompt :generate_code, {
     name: params["name"],

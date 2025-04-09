@@ -21,6 +21,10 @@ llms:
     url: https://api.deepseek.com
     api_key: ENV["DSKEY"]
     default_model: deepseek-reasoner
+  gitee:
+    adapter: openai
+    url: https://ai.gitee.com/v1
+    api_key: ENV["GITEEKEY"]
 default_llm: SiliconFlow
 worker_path: "./workers"
 template_path: "./templates"

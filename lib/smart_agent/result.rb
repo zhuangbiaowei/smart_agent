@@ -7,9 +7,14 @@ module SmartAgent
 
     def call_tools
       if @response.class == String
-        return nil
+        return false
       else
-        @response.dig("choices", 0, "message", "tool_calls")
+        tool_calls = @response.dig("choices", 0, "message", "tool_calls")
+        if tool_calls.empty?
+          return false
+        else
+          return tool_calls
+        end
       end
     end
 

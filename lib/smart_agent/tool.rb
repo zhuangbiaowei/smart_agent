@@ -1,22 +1,20 @@
 module SmartAgent
   class Tool
+    attr_accessor :context, :tool_proc
+
     def initialize(name)
       SmartAgent.logger.info "Create tool's name is #{name}"
       @name = name
-      @code = self.class.tools[name]
+      @context = ToolContext.new(self)
     end
 
     def call(params)
-      @context = ToolContext.new
       @context.input_params = params
-      @context.instance_eval(&@code)
+      @context.instance_eval(&@context.proc)
     end
 
     def to_json
-      @context = ToolContext.new
-      @context.instance_eval(&@code)
       params = @context.params
-
       properties = params.each_with_object({}) do |(name, details), hash|
         hash[name] = {
           type: details[:type],
@@ -28,7 +26,7 @@ module SmartAgent
                type: "function",
                function: {
                  name: @name,
-                 description: "",
+                 description: @context.description,
                  parameters: {
                    type: "object",
                    properties: properties,
@@ -44,7 +42,9 @@ module SmartAgent
       end
 
       def define(name, &block)
-        tools[name] = block
+        tool = Tool.new(name)
+        tools[name] = tool
+        tool.context.instance_eval(&block)
       end
 
       def find_tool(name)
@@ -54,7 +54,11 @@ module SmartAgent
   end
 
   class ToolContext
-    attr_accessor :input_params
+    attr_accessor :input_params, :description, :proc
+
+    def initialize(tool)
+      @tool = tool
+    end
 
     def params
       @params ||= {}
@@ -64,8 +68,17 @@ module SmartAgent
       params[name] = { description: description, type: type }
     end
 
+    def desc(description)
+      @description = description
+    end
+
     def call_worker(name, params)
+      params[:with_history] = false
       SmartAgent.prompt_engine.call_worker(name, params)
+    end
+
+    def tool_proc(&block)
+      @proc = block
     end
   end
 end
