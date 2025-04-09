@@ -85,29 +85,32 @@ module SmartAgent
       params[:with_history] = with_history
       ret = nil
       if @agent.on_event
-        tool_result = {}
+        full_result = {}
         tool_calls = []
         result = SmartAgent.prompt_engine.call_worker_by_stream(name, params) do |chunk, _bytesize|
-          if tool_result.empty?
-            tool_result["id"] = chunk["id"]
-            tool_result["object"] = chunk["object"]
-            tool_result["created"] = chunk["created"]
-            tool_result["model"] = chunk["model"]
-            tool_result["choices"] = [{
+          if full_result.empty?
+            full_result["id"] = chunk["id"]
+            full_result["object"] = chunk["object"]
+            full_result["created"] = chunk["created"]
+            full_result["model"] = chunk["model"]
+            full_result["choices"] = [{
               "index" => 0,
               "message" => {
                 "role" => "assistant",
                 "content" => "",
+                "reasoning_content" => "",
                 "tool_calls" => [],
               },
             }]
-            tool_result["usage"] = chunk["usage"]
-            tool_result["system_fingerprint"] = chunk["system_fingerprint"]
+            full_result["usage"] = chunk["usage"]
+            full_result["system_fingerprint"] = chunk["system_fingerprint"]
           end
           if chunk.dig("choices", 0, "delta", "reasoning_content")
+            full_result["choices"][0]["message"]["reasoning_content"] += chunk.dig("choices", 0, "delta", "reasoning_content")
             @agent.processor(:reasoning).call(chunk) if @agent.processor(:reasoning)
           end
           if chunk.dig("choices", 0, "delta", "content")
+            full_result["choices"][0]["message"]["content"] += chunk.dig("choices", 0, "delta", "content")
             @agent.processor(:content).call(chunk) if @agent.processor(:content)
           end
           if chunk_tool_calls = chunk.dig("choices", 0, "delta", "tool_calls")
@@ -120,8 +123,8 @@ module SmartAgent
             end
           end
         end
-        tool_result["choices"][0]["message"]["tool_calls"] = tool_calls
-        result = tool_result
+        full_result["choices"][0]["message"]["tool_calls"] = tool_calls
+        result = full_result
       else
         result = SmartAgent.prompt_engine.call_worker(name, params)
       end
@@ -141,17 +144,18 @@ module SmartAgent
           @agent.processor(:tool).call({ :content => "ToolName is `#{tool_name}`\n" }) if @agent.processor(:tool)
           @agent.processor(:tool).call({ :content => "params is `#{params}`\n" }) if @agent.processor(:tool)
           tool_result = Tool.find_tool(tool_name).call(params)
-          SmartAgent.prompt_engine.history_messages << result.response.dig("choices", 0, "message")
+
+          SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } #result.response.dig("choices", 0, "message")
           SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s.force_encoding("UTF-8") }
-          results << result
+          results << tool_result
         end
         if server_name = MCPClient.find_server_by_tool_name(tool_name)
           @agent.processor(:tool).call({ :content => "MCP Server is `#{server_name}`, ToolName is `#{tool_name}`\n" }) if @agent.processor(:tool)
           @agent.processor(:tool).call({ :content => "params is `#{params}`\n" }) if @agent.processor(:tool)
           tool_result = MCPClient.new(server_name).call(tool_name, params)
-          SmartAgent.prompt_engine.history_messages << result.response.dig("choices", 0, "message")
+          SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } # result.response.dig("choices", 0, "message")
           SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s }
-          results << result
+          results << tool_result
         end
         @agent.processor(:tool).call({ :content => " ... done\n" }) if @agent.processor(:tool)
       end
