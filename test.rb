@@ -85,7 +85,20 @@ SmartAgent::MCPClient.define :sequentialthinking_tools do
   type :stdio
   command "node /root/mcp-sequentialthinking-tools/dist/index.js"
 end
-agent = engine.build_agent(:smart_bot, tools: [:get_weather, :search, :get_code], mcp_servers: [:opendigger, :sequentialthinking_tools])
+
+SmartAgent::MCPClient.define :amap do
+  type :sse
+  url "https://mcp.amap.com/sse?key=72adc379733dfd020dba574c65847a26"
+end
+
+SmartAgent::MCPClient.define :postgres do
+  type :stdio
+  command "node /root/servers/src/postgres/dist/index.js postgres://docs:ment@localhost/docs"
+end
+
+#agent = engine.build_agent(:smart_bot, tools: [:get_weather, :search, :get_code], mcp_servers: [:opendigger, :sequentialthinking_tools])
+agent = engine.build_agent(:smart_bot, mcp_servers: [:opendigger, :postgres])
+
 agent.on_reasoning do |reasoning_content|
   print reasoning_content.dig("choices", 0, "delta", "reasoning_content")
   print "\n" if reasoning_content.dig("choices", 0, "finish_reason") == "stop"
@@ -104,7 +117,7 @@ end
 #SmartAgent.prompt_engine.clear_history_messages
 #agent.please("借助opendigger工具帮我查询并详细列出GitHub上的Vue项目的从2023年1月到2024年12月的OpenRank指标变化")
 #SmartAgent.prompt_engine.clear_history_messages
-agent.please("请搜索最近关于x.com和马斯克的新闻报道")
+#agent.please("请搜索最近关于x.com和马斯克的新闻报道")
 #SmartAgent.prompt_engine.clear_history_messages
 #agent.please("请通过get_code生成Ruby函数计算三角形的面积，底边长132，高为7.6，告诉我面积是多少？")
 #SmartAgent.prompt_engine.clear_history_messages
@@ -113,3 +126,5 @@ agent.please("请搜索最近关于x.com和马斯克的新闻报道")
 #agent.please("请通过get_code工具生成的Ruby函数计算梯形的面积，上底为105，下底为232，高为13.5，告诉我面积是多少？")
 #SmartAgent.prompt_engine.clear_history_messages
 #agent.please("请使用sequentialthinking工具帮我设计一个高效的远程团队会议系统。请从基本需求分析开始，逐步深入思考，用中文回答。")
+#agent.please("请搜索杭州西湖附近1公里范围内的，评价最高的3家饭店")
+agent.please("postgresql: docs 数据库有哪些表")

@@ -10,7 +10,11 @@ module SmartAgent
       @context = MCPContext.new
       @context.instance_eval(&@code)
       command_path = @context.command_path
-      client = MCP::Client.new(command_path)
+      if @context.mcp_type == :stdio
+        client = MCP::StdioClient.new(command_path)
+      else
+        client = MCP::SSEClient.new(command_path)
+      end
       client.start
       mcp_server_json = client.list_tools
       if mcp_server_json
@@ -25,7 +29,11 @@ module SmartAgent
       @context = MCPContext.new
       @context.instance_eval(&@code)
       command_path = @context.command_path
-      client = MCP::Client.new(command_path)
+      if @context.mcp_type == :stdio
+        client = MCP::StdioClient.new(command_path)
+      else
+        client = MCP::SSEClient.new(command_path)
+      end
       client.start
       client.call_method(
         {
@@ -63,12 +71,20 @@ module SmartAgent
       @mcp_type = mcp_type
     end
 
+    def mcp_type
+      @mcp_type
+    end
+
     def command_path
       @command_path
     end
 
     def command(path)
       @command_path = path
+    end
+
+    def url(url)
+      @command_path = url
     end
   end
 end
