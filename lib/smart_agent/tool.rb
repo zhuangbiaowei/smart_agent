@@ -41,16 +41,29 @@ module SmartAgent
         @tools ||= {}
       end
 
+      def tool_groups
+        @tool_groups ||= {}
+      end
+
       def define(name, &block)
         tool = Tool.new(name)
         tools[name] = tool
         tool.context.instance_eval(&block)
       end
 
+      def define_group(name, &block)
+        tool_group = ToolGroup.new(name)
+        tool_groups[name] = tool_group
+        tool_group.context.instance_eval(&block)
+      end
+
       def find_tool(name)
         tools[name]
       end
     end
+  end
+
+  class ToolGroup
   end
 
   class ToolContext

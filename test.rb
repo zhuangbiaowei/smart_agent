@@ -7,7 +7,6 @@ require "./lib/smart_agent"
 engine = SmartAgent::Engine.new("./config/agent.yml")
 
 SmartAgent.define :smart_bot do
-  #user_question = params[:text]
   call_tool = true
   while call_tool
     result = call_worker(:smart_bot, params, with_tools: true, with_history: true)
@@ -18,8 +17,6 @@ SmartAgent.define :smart_bot do
       call_tool = false
     end
   end
-  #params[:text] = user_question
-  #result = call_worker(:summary, params, with_tools: false, with_history: true)
   if result != true
     result.response
   else
@@ -91,13 +88,20 @@ SmartAgent::MCPClient.define :amap do
   url "https://mcp.amap.com/sse?key=72adc379733dfd020dba574c65847a26"
 end
 
+SmartAgent::MCPClient.define :all do
+  type :sse
+  url "https://mesh-api.dephy.io/mcp/d766aab9-eefb-4c82-b132-959370a131d8/sse"
+end
+
 SmartAgent::MCPClient.define :postgres do
   type :stdio
   command "node /root/servers/src/postgres/dist/index.js postgres://docs:ment@localhost/docs"
 end
 
-#agent = engine.build_agent(:smart_bot, tools: [:get_weather, :search, :get_code], mcp_servers: [:opendigger, :sequentialthinking_tools])
-agent = engine.build_agent(:smart_bot, mcp_servers: [:opendigger, :postgres])
+#agent = engine.build_agent(:smart_bot, tools: [:get_weather, :search, :get_code], mcp_servers: [:opendigger, :sequentialthinking_tools, :amap])
+#agent = engine.build_agent(:smart_bot, mcp_servers: [:opendigger, :postgres])
+
+agent = engine.build_agent(:smart_bot, mcp_servers: [:all])
 
 agent.on_reasoning do |reasoning_content|
   print reasoning_content.dig("choices", 0, "delta", "reasoning_content")
@@ -127,4 +131,6 @@ end
 #SmartAgent.prompt_engine.clear_history_messages
 #agent.please("请使用sequentialthinking工具帮我设计一个高效的远程团队会议系统。请从基本需求分析开始，逐步深入思考，用中文回答。")
 #agent.please("请搜索杭州西湖附近1公里范围内的，评价最高的3家饭店")
-agent.please("postgresql: docs 数据库有哪些表")
+#agent.please("postgresql: docs 数据库有哪些表")
+agent.please("https://x.com/KELMAND1/status/1916680134133796999 这条消息讲了什么内容？")
+agent.please("二战十大名将是哪些人？")

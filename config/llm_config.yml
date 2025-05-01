@@ -25,6 +25,10 @@ llms:
     adapter: openai
     url: https://ai.gitee.com/v1
     api_key: ENV["GITEEKEY"]
+  aliyun:
+    adapter: openai
+    url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key: ENV["ALIKEY"]
 default_llm: SiliconFlow
 worker_path: "./workers"
 template_path: "./templates"

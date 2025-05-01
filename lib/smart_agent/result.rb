@@ -19,7 +19,11 @@ module SmartAgent
     end
 
     def content
-      @response.dig("choices", 0, "message", "content")
+      if @response.class == Hash
+        @response.dig("choices", 0, "message", "content")
+      else
+        @response
+      end
     end
 
     def response
