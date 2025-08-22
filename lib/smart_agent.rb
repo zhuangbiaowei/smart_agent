@@ -1,4 +1,4 @@
-require "../mcp-sdk.rb/lib/mcp"
+require "mcp"
 
 require File.expand_path("../smart_agent/version", __FILE__)
 require File.expand_path("../smart_agent/engine", __FILE__)

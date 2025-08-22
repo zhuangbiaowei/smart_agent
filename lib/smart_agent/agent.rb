@@ -10,6 +10,10 @@ module SmartAgent
       @code = self.class.agents[name]
     end
 
+    def name
+      @name
+    end
+
     def on_reasoning(&block)
       @reasoning_event_proc = block
     end
@@ -66,7 +70,8 @@ module SmartAgent
     end
 
     def call_worker(name, params, with_tools: true, with_history: false)
-      SmartAgent.logger.info ("Call Worker name is: #{name}")
+      SmartAgent.logger.info("Call Worker name is: #{name}")
+      SmartAgent.logger.info("Call Worker params is: #{params}")
       if with_tools
         simple_tools = []
         if @agent.tools
@@ -85,51 +90,56 @@ module SmartAgent
       params[:with_history] = with_history
       ret = nil
       if @agent.on_event
-        full_result = {}
-        tool_calls = []
-        result = SmartAgent.prompt_engine.call_worker_by_stream(name, params) do |chunk, _bytesize|
-          if full_result.empty?
-            full_result["id"] = chunk["id"]
-            full_result["object"] = chunk["object"]
-            full_result["created"] = chunk["created"]
-            full_result["model"] = chunk["model"]
-            full_result["choices"] = [{
-              "index" => 0,
-              "message" => {
-                "role" => "assistant",
-                "content" => "",
-                "reasoning_content" => "",
-                "tool_calls" => [],
-              },
-            }]
-            full_result["usage"] = chunk["usage"]
-            full_result["system_fingerprint"] = chunk["system_fingerprint"]
-          end
+        SmartAgent.prompt_engine.call_worker_by_stream(name, params) do |chunk, _bytesize|
           if chunk.dig("choices", 0, "delta", "reasoning_content")
-            full_result["choices"][0]["message"]["reasoning_content"] += chunk.dig("choices", 0, "delta", "reasoning_content")
             @agent.processor(:reasoning).call(chunk) if @agent.processor(:reasoning)
           end
           if chunk.dig("choices", 0, "delta", "content")
-            full_result["choices"][0]["message"]["content"] += chunk.dig("choices", 0, "delta", "content")
             @agent.processor(:content).call(chunk) if @agent.processor(:content)
           end
-          if chunk_tool_calls = chunk.dig("choices", 0, "delta", "tool_calls")
-            chunk_tool_calls.each do |tool_call|
-              if tool_calls.size > tool_call["index"]
-                tool_calls[tool_call["index"]]["function"]["arguments"] += tool_call["function"]["arguments"]
-              else
-                tool_calls << tool_call
-              end
-            end
-          end
         end
-        full_result["choices"][0]["message"]["tool_calls"] = tool_calls
-        result = full_result
+        result = SmartAgent.prompt_engine.stream_response
       else
         result = SmartAgent.prompt_engine.call_worker(name, params)
       end
       ret = Result.new(result)
       return ret
+    end
+
+    def safe_parse(input)
+      # 保存原始输入用于调试
+      original_input = input.dup
+
+      # 步骤1: 清理输入
+      cleaned = input.strip
+
+      # 步骤2: 处理外层引号（如果存在）
+      if cleaned.start_with?('"') && cleaned.end_with?('"')
+        cleaned = cleaned[1...-1]
+      end
+
+      # 步骤3: 反转义双重转义字符
+      # 关键：只处理需要反转义的字符，保持JSON合法性
+      cleaned = cleaned
+        .gsub(/\\"/, '"') # 反转义引号
+        .gsub(/\\\\/, '\\')    # 反转义反斜杠
+      # 不反转义\n, \t, \r等，因为它们是JSON合法的转义序列
+
+      # 步骤4: 尝试解析
+      begin
+        return JSON.parse(cleaned)
+      rescue JSON::ParserError => e
+        # 如果清理后失败，尝试原始输入
+        begin
+          return JSON.parse(original_input)
+        rescue JSON::ParserError
+          puts "Failed to parse JSON: #{e.message}"
+          puts "Original: #{original_input}"
+          puts "Cleaned: #{cleaned}"
+          # 返回原始字符串以便后续处理
+          return original_input
+        end
+      end
     end
 
     def call_tools(result)
@@ -139,28 +149,38 @@ module SmartAgent
       result.call_tools.each do |tool|
         tool_call_id = tool["id"]
         tool_name = tool["function"]["name"].to_sym
-        params = JSON.parse(tool["function"]["arguments"])
+        params = safe_parse(tool["function"]["arguments"])
         if Tool.find_tool(tool_name)
-          @agent.processor(:tool).call({ :content => "ToolName is `#{tool_name}`\n" }) if @agent.processor(:tool)
-          @agent.processor(:tool).call({ :content => "params is `#{params}`\n" }) if @agent.processor(:tool)
-          tool_result = Tool.find_tool(tool_name).call(params)
-
-          SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } #result.response.dig("choices", 0, "message")
-          SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s.force_encoding("UTF-8") }
-          results << tool_result
+          tool_result = Tool.find_tool(tool_name).call(params, @agent)
+          if tool_result
+            @agent.processor(:tool).call({ :content => tool_result })
+            SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } #result.response.dig("choices", 0, "message")
+            SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s.force_encoding("UTF-8") }
+            results << tool_result
+          end
         end
         if server_name = MCPClient.find_server_by_tool_name(tool_name)
-          @agent.processor(:tool).call({ :content => "MCP Server is `#{server_name}`, ToolName is `#{tool_name}`\n" }) if @agent.processor(:tool)
-          @agent.processor(:tool).call({ :content => "params is `#{params}`\n" }) if @agent.processor(:tool)
-          tool_result = MCPClient.new(server_name).call(tool_name, params)
-          SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } # result.response.dig("choices", 0, "message")
-          SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s }
-          results << tool_result
+          tool_result = MCPClient.new(server_name).call(tool_name, params, @agent)
+          if tool_result
+            @agent.processor(:tool).call({ :content => tool_result })
+            SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } # result.response.dig("choices", 0, "message")
+            SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s }
+            results << tool_result
+          end
         end
         @agent.processor(:tool).call({ :content => " ... done\n" }) if @agent.processor(:tool)
       end
       @agent.processor(:tool).call({ :status => :end }) if @agent.processor(:tool)
       return results
+    end
+
+    def call_tool(name, params = {})
+      if Tool.find_tool(name)
+        return Tool.find_tool(name).call(params, @agent)
+      end
+      if server_name = MCPClient.find_server_by_tool_name(name)
+        return MCPClient.new(server_name).call(name, params, @agent)
+      end
     end
 
     def params

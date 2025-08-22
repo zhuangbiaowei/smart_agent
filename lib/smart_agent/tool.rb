@@ -8,7 +8,11 @@ module SmartAgent
       @context = ToolContext.new(self)
     end
 
-    def call(params)
+    def call(params, agent = nil)
+      if agent
+        agent.processor(:tool).call({ :content => "ToolName is `#{@name}`\n" }) if agent.processor(:tool)
+        agent.processor(:tool).call({ :content => "params is `#{params}`\n" }) if agent.processor(:tool)
+      end
       @context.input_params = params
       @context.instance_eval(&@context.proc)
     end
@@ -88,6 +92,15 @@ module SmartAgent
     def call_worker(name, params)
       params[:with_history] = false
       SmartAgent.prompt_engine.call_worker(name, params)
+    end
+
+    def call_tool(name, params = {})
+      if Tool.find_tool(name)
+        return Tool.find_tool(name).call(params)
+      end
+      if server_name = MCPClient.find_server_by_tool_name(name)
+        return MCPClient.new(server_name).call(name, params)
+      end
     end
 
     def tool_proc(&block)
