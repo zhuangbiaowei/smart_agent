@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = ">= 3.2.0"
 
-  spec.add_runtime_dependency "smart_prompt"
+  spec.add_runtime_dependency "smart_prompt", "~> 0.4.2"
   spec.add_runtime_dependency "mcp-sdk.rb"
   spec.add_development_dependency "rspec", "~> 3.0"
 end

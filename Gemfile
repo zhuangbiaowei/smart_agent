@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "smart_prompt", "~> 0.3.3"
+gem "smart_prompt", "~> 0.4.2"
 gem "better_prompt", "~> 0.2.1"
 gem "mcp-sdk.rb", "~> 0.1.2"
 gem "ruby_rich", "~> 0.4.0"

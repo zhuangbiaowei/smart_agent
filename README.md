@@ -2,7 +2,7 @@
 
 [![Ruby Version](https://img.shields.io/badge/Ruby-3.2%2B-red)](https://www.ruby-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.1.8-green.svg)](./lib/smart_agent/version.rb)
+[![Version](https://img.shields.io/badge/Version-0.2.6-green.svg)](./lib/smart_agent/version.rb)
 
 **An intelligent agent framework for Ruby with MCP support, tool calling, and multi-LLM integration**
 
@@ -167,9 +167,17 @@ SmartAgent::MCPClient.define :web_service do
   url "https://api.example.com/mcp/sse"
 end
 
+SmartAgent::MCPClient.define :limited_web_service do
+  type :sse
+  url "https://api.example.com/mcp/sse"
+  functions [:search, :fetch]
+end
+
 # Use with agent
 agent = engine.build_agent(:research_bot, mcp_servers: [:opendigger, :postgres])
 ```
+
+If `functions` is configured, only the listed MCP tools are exposed to the agent. If `functions` is omitted, all tools from that MCP server are exposed.
 
 ### Advanced Features
 

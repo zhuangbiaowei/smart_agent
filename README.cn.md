@@ -2,7 +2,7 @@
 
 [![Ruby Version](https://img.shields.io/badge/Ruby-3.2%2B-red)](https://www.ruby-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.1.8-green.svg)](./lib/smart_agent/version.rb)
+[![Version](https://img.shields.io/badge/Version-0.2.6-green.svg)](./lib/smart_agent/version.rb)
 
 **支持MCP协议、工具调用和多LLM集成的Ruby智能代理框架**
 
@@ -168,9 +168,17 @@ SmartAgent::MCPClient.define :web_service do
   url "https://api.example.com/mcp/sse"
 end
 
+SmartAgent::MCPClient.define :limited_web_service do
+  type :sse
+  url "https://api.example.com/mcp/sse"
+  functions [:search, :fetch]
+end
+
 # 与代理一起使用
 agent = engine.build_agent(:research_bot, mcp_servers: [:opendigger, :postgres])
 ```
+
+如果配置了 `functions`，则只会向 agent 暴露列出的 MCP 方法；如果不配置 `functions`，则默认暴露该 MCP 服务的全部方法。
 
 ### 高级功能
 
