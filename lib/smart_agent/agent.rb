@@ -153,7 +153,7 @@ module SmartAgent
         if Tool.find_tool(tool_name)
           tool_result = Tool.find_tool(tool_name).call(params, @agent)
           if tool_result
-            @agent.processor(:tool).call({ :content => tool_result })
+            @agent.processor(:tool).call({ :content => tool_result }) if @agent.processor(:tool)
             SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } #result.response.dig("choices", 0, "message")
             SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s.force_encoding("UTF-8") }
             results << tool_result
@@ -162,7 +162,7 @@ module SmartAgent
         if server_name = MCPClient.find_server_by_tool_name(tool_name)
           tool_result = MCPClient.new(server_name).call(tool_name, params, @agent)
           if tool_result
-            @agent.processor(:tool).call({ :content => tool_result })
+            @agent.processor(:tool).call({ :content => tool_result }) if @agent.processor(:tool)
             SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } # result.response.dig("choices", 0, "message")
             SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s }
             results << tool_result
