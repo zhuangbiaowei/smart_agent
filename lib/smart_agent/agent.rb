@@ -72,6 +72,8 @@ module SmartAgent
     def call_worker(name, params, with_tools: true, with_history: false)
       SmartAgent.logger.info("Call Worker name is: #{name}")
       SmartAgent.logger.info("Call Worker params is: #{params}")
+      # 记录 session_id，call_tools 写工具结果时需要按 session 路由（HistoryManager 启用时）
+      @session_id = params[:session_id]
       if with_tools
         simple_tools = []
         if @agent.tools
@@ -142,11 +144,21 @@ module SmartAgent
       end
     end
 
-    def call_tools(result)
+    def call_tools(result, calls: nil)
       @agent.processor(:tool).call({ :status => :start }) if @agent.processor(:tool)
       SmartAgent.logger.info("call tools: " + result.to_s)
       results = []
-      result.call_tools.each do |tool|
+      completed_calls = []
+      completed_messages = []
+      # DeepSeek thinking 模式要求带 tool_calls 的 assistant 消息回传 reasoning_content，否则 400
+      reasoning = begin
+        result.response.dig("choices", 0, "message", "reasoning_content")
+      rescue StandardError
+        nil
+      end
+      # 调用方可传入 calls: 覆盖本次要执行的工具调用集合（如截断 / DSML 兑底解析后的结果）
+      source = calls || result.call_tools
+      (source || []).each do |tool|
         tool_call_id = tool["id"]
         tool_name = tool["function"]["name"].to_sym
         params = safe_parse(tool["function"]["arguments"])
@@ -154,8 +166,8 @@ module SmartAgent
           tool_result = Tool.find_tool(tool_name).call(params, @agent)
           if tool_result
             @agent.processor(:tool).call({ :content => tool_result }) if @agent.processor(:tool)
-            SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } #result.response.dig("choices", 0, "message")
-            SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s.force_encoding("UTF-8") }
+            completed_calls << tool
+            completed_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s.force_encoding("UTF-8") }
             results << tool_result
           end
         end
@@ -163,8 +175,8 @@ module SmartAgent
           tool_result = MCPClient.new(server_name).call(tool_name, params, @agent)
           if tool_result
             @agent.processor(:tool).call({ :content => tool_result }) if @agent.processor(:tool)
-            SmartAgent.prompt_engine.history_messages << { "role" => "assistant", "content" => "", "tool_calls" => [tool] } # result.response.dig("choices", 0, "message")
-            SmartAgent.prompt_engine.history_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s }
+            completed_calls << tool
+            completed_messages << { "role" => "tool", "tool_call_id" => tool_call_id, "content" => tool_result.to_s }
             results << tool_result
           end
         end
@@ -172,6 +184,26 @@ module SmartAgent
       end
       @agent.processor(:tool).call({ :status => :end }) if @agent.processor(:tool)
       return results
+    ensure
+      # 每轮写一条 assistant 消息（含全部 tool_calls），而不是每个工具各写一条，
+      # 避免交错产生 assistant/tool/assistant/tool 序列；被中断时也保留已完成部分。
+      if completed_calls && completed_calls.any?
+        message = { "role" => "assistant", "content" => "", "tool_calls" => completed_calls }
+        message["reasoning_content"] = reasoning if reasoning
+        append_history_message(message)
+        completed_messages.each { |m| append_history_message(m) }
+      end
+    end
+
+    # 写历史：HistoryManager 可用时按 session 路由（否则工具结果写全局、读 session 会失忆），
+    # 不可用时回退到全局数组（与旧行为一致）。
+    def append_history_message(message)
+      engine = SmartAgent.prompt_engine
+      if engine.respond_to?(:history_manager) && engine.history_manager && @session_id
+        engine.history_manager.add_message(@session_id, message)
+      elsif engine.respond_to?(:history_messages)
+        engine.history_messages << message
+      end
     end
 
     def call_tool(name, params = {})
